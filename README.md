@@ -3,10 +3,12 @@
 ## Objective: Build a chat room app using a socket server
 
 ### Learning objectives:
-- Learn and understand what a socket server is
-- Learn how it relates to e.g. TCP, HTTP
-- Create and start a socket server and send a request from a client
-- Build a chat app using a socket server
+- `Learn and understand what a socket server is`
+- `Learn how it relates to e.g. TCP, HTTP`
+- `Create and start a socket server and send a request from a client`
+- `Build a chat app using a socket server`
+
+---
 
 ### Currently
 - Create and start a socket server and send a request from a client ✅
