@@ -54,6 +54,6 @@
 - In HTTP, e.g. a client sends a request to a server and the server sends back a response. AFter this the connection is closed
 - HTTP runs on top of the TCP protocol
 - Websocket is bidirectional so data flows both ways. In HTTP it is unidirectional ie. can only flow from client to server
-- Websocket when one party closes the connection, the connection is terminated at both ends
+- Websocket when the host closes the connection, the connection is terminated at both ends
 - To make a request in HTTP, you have to use HTTP request method e.g. GET, PUT, POST, DELETE, PATCH (CRUD)
 - HTTP is stateless (after request is finished connection is closed); Websocket is stateful (because the connection stays open after request is finished)
