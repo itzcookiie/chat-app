@@ -7,6 +7,7 @@ import threading
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = str(self.request.recv(1024), 'ascii')
+        print(f"Received from client: {data}")
         cur_thread = threading.current_thread()
         response = bytes("{}: {}".format(cur_thread.name, data), 'ascii')
         self.request.sendall(response)
@@ -26,9 +27,8 @@ class SocketServer:
     def start_server(self):
         with self.server:
             while True:
-                server_thread = threading.Thread(target=self.server.serve_forever)
-                server_thread.daemon = True
-                server_thread.start()
+                self.server.serve_forever()
+                self.server.shutdown()
 
     def handle_message(self, new_socket, addr):
         host, port = addr
@@ -64,15 +64,18 @@ class MainSocketServer(SocketServer):
 
 
 if __name__ == '__main__':
-    main = MainSocketServer(3000)
-    c1_socket = SocketServer(3005)
-    c2_socket = SocketServer(3010)
-
     args = sys.argv
     if len(args) > 1:
         if int(args[1]) == 1:
-            c1_socket.start_server()
+            c1_socket = SocketServer(3005)
+            c1_thread = threading.Thread(target=c1_socket.start_server())
+            c1_thread.daemon = True
+            c1_thread.start()
         elif int(args[1]) == 2:
-            c2_socket.start_server()
+            c2_socket = SocketServer(3010)
+            c2_thread = threading.Thread(target=c2_socket.start_server())
+            c2_thread.daemon = True
+            c2_thread.start()
     else:
+        main = MainSocketServer(3000)
         main.start_server()
