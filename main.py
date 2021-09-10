@@ -6,6 +6,7 @@ import threading
 
 main_socket_port = 3000
 child_socket_ports = [3005, 3010]
+user_socket_mapping = {}
 
 
 def send_message_to_child_socket(port: int, message: str) -> None:
@@ -58,17 +59,25 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 class SocketServer:
-    def __init__(self, port, request_handler):
+    def __init__(self, port):
         self.message = ''
         self.class_name_in_bytes = self.__class__.__name__.encode('utf8')
         self.address = ('localhost', port)
-        self.server = ThreadedTCPServer(self.address, request_handler)
+        self.server = socket.create_server(self.address)
 
     def start_server(self):
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         with self.server:
+            self.server.listen()
             while True:
-                self.server.serve_forever()
-                self.server.shutdown()
+                new_socket, addr = self.server.accept()
+                with new_socket:
+                    data = new_socket.recv(1024).decode('ascii')
+                    print(data)
+                    username, message = data.split(":")
+                    print(new_socket.getpeername())
+                    # for port in child_socket_ports:
+                    #     send_message_to_child_socket()
 
     def handle_message(self, new_socket, addr):
         host, port = addr
@@ -95,7 +104,7 @@ def main():
     socket_servers = []
     threads = []
     for port in child_socket_ports:
-        socket_servers.append(SocketServer(port, ChildSocketRequestHandler))
+        socket_servers.append(SocketServer(port))
 
     for child_socket in socket_servers:
         threads.append(threading.Thread(target=child_socket.start_server))
@@ -105,7 +114,7 @@ def main():
         thread.start()
 
     try:
-        main_socket = MainSocketServer(main_socket_port, MainSocketRequestHandler)
+        main_socket = MainSocketServer(main_socket_port)
         main_socket.start_server()
     finally:
         for child_socket in socket_servers:
