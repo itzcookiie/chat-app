@@ -4,6 +4,22 @@ import sys
 import threading
 
 
+main_socket_port = 3000
+child_socket_ports = [3005, 3010]
+
+
+def send_message_to_child_socket(port: int, message: str) -> None:
+    with socket.socket() as sock:
+        address = ('localhost', port)
+        sock.connect(address)
+        with sock:
+            print(f"MainSocketServer: Sending message from client to ChildSocket {port}")
+            data = message.encode('ascii')
+            sock.sendall(data)
+            response = sock.recv(1024).decode('ascii')
+            print(response)
+
+
 class IntConverter:
     @staticmethod
     def convert_from_bytes_to_dec(int_bytes):
@@ -18,27 +34,23 @@ class ChildSocketRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         # Message sent from MainSocketServer
         data = self.request.recv(1024).decode('ascii')
-        print(data)
-        print("Message sent by MainSocketServer received!")
-        message = f"ChildSocket: Hey MainSocket! How you doing!"
+        print(f"Client: {data}")
         cur_thread = threading.current_thread()
+        message = f"ChildSocket: Message sent by MainSocketServer received!"
         response = f"{cur_thread.name}: {message}".encode('ascii')
         self.request.sendall(response)
 
 
 class MainSocketRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
-        data = self.request.recv(1024)
-        port = IntConverter.convert_from_bytes_to_dec(data)
-        with socket.socket() as sock:
-            address = ('localhost', port)
-            sock.connect(address)
-            with sock:
-                message = f'MainSocketServer: Hello ChildSocket {port}'.encode('ascii')
-                sock.sendall(message)
-                response = sock.recv(1024).decode('ascii')
-                print(response)
-        self.request.sendall(f'Successfully sent message to port {port}'.encode('ascii'))
+        print(self.client_address)
+        print(self.request)
+        print(self.server)
+        data = self.request.recv(1024).decode('ascii')
+        for port in child_socket_ports:
+            send_message_to_child_socket(port, data)
+        child_socket_ports_string = [str(s) for s in child_socket_ports]
+        self.request.sendall(f'Successfully sent message to ports {" and ".join(child_socket_ports_string)}'.encode('ascii'))
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -82,18 +94,18 @@ class MainSocketServer(SocketServer):
 def main():
     socket_servers = []
     threads = []
-    socket_servers.append(SocketServer(3005, ChildSocketRequestHandler))
-    socket_servers.append(SocketServer(3010, ChildSocketRequestHandler))
+    for port in child_socket_ports:
+        socket_servers.append(SocketServer(port, ChildSocketRequestHandler))
 
     for child_socket in socket_servers:
         threads.append(threading.Thread(target=child_socket.start_server))
 
-    try:
-        for thread in threads:
-            thread.daemon = True
-            thread.start()
+    for thread in threads:
+        thread.daemon = True
+        thread.start()
 
-        main_socket = MainSocketServer(3000, MainSocketRequestHandler)
+    try:
+        main_socket = MainSocketServer(main_socket_port, MainSocketRequestHandler)
         main_socket.start_server()
     finally:
         for child_socket in socket_servers:

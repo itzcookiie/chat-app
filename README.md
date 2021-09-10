@@ -16,10 +16,10 @@
 ### Next steps
 
 #### For the chat room effect
-- Build 3 socket servers, one main and two child ones
+- Build 3 socket servers, one main and two child ones ✅
 
 *Part 1*
-- Send a message to the main socket from a client and broadcast/send that message to the other child ones
+- Send a message to the main socket from a client and broadcast/send that message to the other child ones ✅
 
 *Part 2*
 - Create two client sockets (or imagine you have 2 users)
