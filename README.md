@@ -23,6 +23,7 @@
 
 *Part 2*
 - Create two client sockets (or imagine you have 2 users)
+  - Use input in a while loop to give the impression of a logged in user
 - Map the two child server sockets to the two client sockets
 - So when a client sends a message to the server, only it's chosen server socket will see the message (important part) and respond back to it
 - IE. a client can identify itself with a particular server socket
