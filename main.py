@@ -1,12 +1,15 @@
 import socket
 import socketserver
+
+import random
 import sys
 import threading
+import json
 
 
 main_socket_port = 3000
 child_socket_ports = [3005, 3010]
-user_socket_mapping = {}
+user_room_mapping = {"A": [], "B": []}
 
 
 def send_message_to_child_socket(port: int, message: str) -> None:
@@ -19,6 +22,14 @@ def send_message_to_child_socket(port: int, message: str) -> None:
             sock.sendall(data)
             response = sock.recv(1024).decode('ascii')
             print(response)
+
+
+def convert_bytes_to_json(data):
+    return json.loads(data.decode('ascii'))
+
+
+def process_user_message(message):
+    pass
 
 
 class IntConverter:
@@ -73,6 +84,12 @@ class SocketServer:
                 new_socket, addr = self.server.accept()
                 with new_socket:
                     data = new_socket.recv(1024).decode('ascii')
+                    json_data = convert_bytes_to_json(data)
+                    if json_data.action == "ASSIGN_USER":
+                        user_room_mapping[json_data.room].append(json_data.username)
+                        new_socket.sendall(f"Successfully joined room f{json_data.room}".encode('ascii'))
+                    elif json_data.action == "ROOM_CHAT":
+                        users_in_same_room = user_room_mapping[json_data.room]
                     print(data)
                     username, message = data.split(":")
                     print(new_socket.getpeername())
