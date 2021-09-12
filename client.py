@@ -10,8 +10,8 @@ rooms = ["A", "B"]
 
 def send_message_to_server(msg):
     s = socket.create_connection(address)
-    # s.getsockopt( socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-    # s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    s.getsockopt( socket.SOL_SOCKET, socket.SO_KEEPALIVE)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     with s:
         s.sendall(msg)
         res = s.recv(4096).decode('ascii')
@@ -39,7 +39,8 @@ print(response)
 print("\n" * 10)
 print(f"Welcome to room {room} {username}!")
 while True:
-    message = input("").encode('ascii')
+    message = input(f"{username}: ")
     room_chat_data = {"username": username, "room": room, "message": message, "action": "ROOM_CHAT"}
     response = send_message_to_server(convert_json_to_bytes(room_chat_data))
-    print(response)
+    if not len(response):
+        continue

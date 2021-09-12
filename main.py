@@ -11,6 +11,9 @@ main_socket_port = 3000
 child_socket_ports = [3005, 3010]
 user_room_mapping = {"A": [], "B": []}
 
+message_queue = []
+current_user = ()
+
 
 def send_message_to_child_socket(port: int, message: str) -> None:
     with socket.socket() as sock:
@@ -24,8 +27,27 @@ def send_message_to_child_socket(port: int, message: str) -> None:
             print(response)
 
 
+def handle_message_queue():
+    while True:
+        global message_queue
+        if len(message_queue) > 0:
+            for message_data in message_queue:
+                # message_queue_data = {"sender": json_data["username"], "message": json_data["message"], "users": other_users}
+                users_list = message_data["users"]
+                while len(users_list):
+                    json_data, client_socket = current_user
+                    if json_data["username"] in users_list:
+                        try:
+                            print(client_socket)
+                            client_socket.sendall(message_data["message"].encode('ascii'))
+                            message_data["finished"] = True
+                        except OSError:
+                            pass
+            message_queue = [message for message in message_queue if not message["finished"]]
+
+
 def convert_bytes_to_json(data):
-    return json.loads(data.decode('ascii'))
+    return json.loads(data.encode('ascii'))
 
 
 def process_user_message(message):
@@ -85,14 +107,23 @@ class SocketServer:
                 with new_socket:
                     data = new_socket.recv(1024).decode('ascii')
                     json_data = convert_bytes_to_json(data)
-                    if json_data.action == "ASSIGN_USER":
-                        user_room_mapping[json_data.room].append(json_data.username)
-                        new_socket.sendall(f"Successfully joined room f{json_data.room}".encode('ascii'))
-                    elif json_data.action == "ROOM_CHAT":
-                        users_in_same_room = user_room_mapping[json_data.room]
-                    print(data)
-                    username, message = data.split(":")
-                    print(new_socket.getpeername())
+                    if json_data["action"] == "ASSIGN_USER":
+                        user_room_mapping[json_data["room"]].append(json_data["username"])
+                        new_socket.sendall(f"Successfully joined room {json_data['room']}".encode('ascii'))
+                    elif json_data["action"] == "ROOM_CHAT":
+                        users_in_same_room = user_room_mapping[json_data["room"]]
+                        other_users = [user for user in users_in_same_room if user != json_data["username"]]
+                        global current_user
+                        current_user = (json_data, new_socket)
+                        message_queue_data = {"sender": json_data["username"],
+                                              "message": json_data["message"],
+                                              "users": other_users,
+                                              "finished": False}
+                        message_queue.append(message_queue_data)
+
+                    # print(user_room_mapping)
+                    # username, message = data.split(":")
+                    print(current_user)
                     # for port in child_socket_ports:
                     #     send_message_to_child_socket()
 
@@ -129,6 +160,10 @@ def main():
     for thread in threads:
         thread.daemon = True
         thread.start()
+
+    msg_queue_thread = threading.Thread(target=handle_message_queue)
+    msg_queue_thread.daemon = True
+    msg_queue_thread.start()
 
     try:
         main_socket = MainSocketServer(main_socket_port)
