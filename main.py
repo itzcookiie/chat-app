@@ -7,15 +7,16 @@ import threading
 import json
 
 
-main_socket_port = 3000
+main_socket_port = 5000
 child_socket_ports = [3005, 3010]
 user_room_mapping = {"A": [], "B": []}
 
 message_queue = []
 current_user = ()
+clients = []
 
 
-def send_message_to_child_socket(port: int, message: str) -> None:
+def send_message_to_child_socket(sock, message: str) -> None:
     with socket.socket() as sock:
         address = ('localhost', port)
         sock.connect(address)
@@ -95,7 +96,7 @@ class SocketServer:
     def __init__(self, port):
         self.message = ''
         self.class_name_in_bytes = self.__class__.__name__.encode('utf8')
-        self.address = ('localhost', port)
+        self.address = ('0.0.0.0', port)
         self.server = socket.create_server(self.address)
 
     def start_server(self):
@@ -104,28 +105,20 @@ class SocketServer:
             self.server.listen()
             while True:
                 new_socket, addr = self.server.accept()
-                with new_socket:
-                    data = new_socket.recv(1024).decode('ascii')
-                    json_data = convert_bytes_to_json(data)
-                    if json_data["action"] == "ASSIGN_USER":
-                        user_room_mapping[json_data["room"]].append(json_data["username"])
-                        new_socket.sendall(f"Successfully joined room {json_data['room']}".encode('ascii'))
-                    elif json_data["action"] == "ROOM_CHAT":
-                        users_in_same_room = user_room_mapping[json_data["room"]]
-                        other_users = [user for user in users_in_same_room if user != json_data["username"]]
-                        global current_user
-                        current_user = (json_data, new_socket)
-                        message_queue_data = {"sender": json_data["username"],
-                                              "message": json_data["message"],
-                                              "users": other_users,
-                                              "finished": False}
-                        message_queue.append(message_queue_data)
+                print(f"Connected to {addr}")
+                clients.append(new_socket)
+                # username = new_socket.recv(1024).decode()
+                # new_socket.sendall(f"{username} has joined the server!".encode())
+                t = threading.Thread(target=self.check_for_messages, args=(new_socket, ))
+                t.daemon = True
+                t.start()
 
-                    # print(user_room_mapping)
-                    # username, message = data.split(":")
-                    print(current_user)
-                    # for port in child_socket_ports:
-                    #     send_message_to_child_socket()
+    def check_for_messages(self, new_socket):
+        while True:
+            data = new_socket.recv(1024).decode('ascii')
+            for client in clients:
+                client.sendall(data.encode())
+                print(data)
 
     def handle_message(self, new_socket, addr):
         host, port = addr
@@ -149,28 +142,28 @@ class MainSocketServer(SocketServer):
 #
 
 def main():
-    socket_servers = []
-    threads = []
-    for port in child_socket_ports:
-        socket_servers.append(SocketServer(port))
-
-    for child_socket in socket_servers:
-        threads.append(threading.Thread(target=child_socket.start_server))
-
-    for thread in threads:
-        thread.daemon = True
-        thread.start()
-
-    msg_queue_thread = threading.Thread(target=handle_message_queue)
-    msg_queue_thread.daemon = True
-    msg_queue_thread.start()
+    # socket_servers = []
+    # threads = []
+    # for port in child_socket_ports:
+    #     socket_servers.append(SocketServer(port))
+    #
+    # for child_socket in socket_servers:
+    #     threads.append(threading.Thread(target=child_socket.start_server))
+    #
+    # for thread in threads:
+    #     thread.daemon = True
+    #     thread.start()
+    #
+    # msg_queue_thread = threading.Thread(target=handle_message_queue)
+    # msg_queue_thread.daemon = True
+    # msg_queue_thread.start()
 
     try:
         main_socket = MainSocketServer(main_socket_port)
         main_socket.start_server()
     finally:
-        for child_socket in socket_servers:
-            child_socket.server.shutdown()
+        # for child_socket in socket_servers:
+        #     child_socket.server.shutdown()
         main_socket.server.shutdown()
         print("Closing down servers")
 
