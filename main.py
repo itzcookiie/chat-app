@@ -1,16 +1,35 @@
 import socket
 import socketserver
 
+import pickle
 import sys
 import threading
 import json
 from multiprocessing import Process
 
 
-main_socket_port = 5000
-child_socket_ports = [3005, 3010]
-clients = []
+class Actions:
+    ASSIGN_USER = "ASSIGN_USER"
+    USER_CHAT = "USER_CHAT"
+    FIRST_TIME = "FIRST_TIME"
 
+
+class SerialiseData:
+    @staticmethod
+    def serialise_data(data):
+        return pickle.dumps(data)
+
+    @staticmethod
+    def unserialise_data(data):
+        return pickle.loads(data)
+
+
+main_socket_port = 500
+child_socket_ports = [3005, 3010]
+socket_room_mapping = {
+    "A": 3005,
+    "B": 3010
+}
 
 def send_message_to_child_socket(sock, message: str) -> None:
     with socket.socket() as sock:
@@ -57,12 +76,14 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 class BaseSocketServer:
     def __init__(self, port):
-        self.address = ('0.0.0.0', port)
+        self.address = ('localhost', port)
         self.server = socket.create_server(self.address)
 
     def start_server(self):
+        print('Starting server...')
         with self.server:
             self.server.listen()
+            print('Server now listening for requests..')
             while True:
                 new_socket, addr = self.server.accept()
                 self.handle_server(new_socket, addr)
@@ -81,7 +102,7 @@ class SocketServer(BaseSocketServer):
 
     def handle_server(self, new_socket, addr):
         print(f"Connected to {addr}")
-        clients.append(new_socket)
+        self.add_client(new_socket)
         # username = new_socket.recv(1024).decode()
         # new_socket.sendall(f"{username} has joined the server!".encode())
         t = threading.Thread(target=self.check_for_messages, args=(new_socket, ))
@@ -90,10 +111,14 @@ class SocketServer(BaseSocketServer):
 
     def check_for_messages(self, new_socket):
         while True:
-            data = new_socket.recv(1024).decode('ascii')
-            for client in self.clients:
-                client.sendall(data.encode())
-                print(data)
+            data = SerialiseData.unserialise_data(new_socket.recv(1024))
+            if data["action"] == Actions.FIRST_TIME:
+                welcome_msg = SerialiseData.serialise_data(f"{data['user']} has joined the room!")
+                for client in self.clients:
+                    client.sendall(welcome_msg)
+            else:
+                for client in self.clients:
+                    client.sendall(data["message"])
 
     def add_client(self, client):
         self.clients.append(client)
@@ -113,8 +138,13 @@ class MainSocketServer(BaseSocketServer):
         self.child_sockets = []
 
     def handle_server(self, new_socket, addr):
-        print(new_socket, addr)
-        new_socket.sendall("MainSocket welcomes you!".encode())
+        message = pickle.loads(new_socket.recv(1024))
+        print(f"Connected to {addr}, {message['user']}")
+        if message["action"] == Actions.ASSIGN_USER:
+            room_port = socket_room_mapping[message["room"]]
+            socket_address = SerialiseData.serialise_data(('localhost', room_port))
+            new_socket.sendall(socket_address)
+        # new_socket.sendall("MainSocket welcomes you!".encode())
         # for child_socket in self.child_sockets:
         #     p = Process(target=child_socket.start_server)
         #     p.start()
@@ -132,21 +162,18 @@ class MainSocketServer(BaseSocketServer):
 #
 
 def main():
-    # socket_servers = []
-    # threads = []
-    # for port in child_socket_ports:
-    #     socket_servers.append(SocketServer(port))
-    #
-    # for child_socket in socket_servers:
-    #     threads.append(threading.Thread(target=child_socket.start_server))
-    #
-    # for thread in threads:
-    #     thread.daemon = True
-    #     thread.start()
-    #
-    # msg_queue_thread = threading.Thread(target=handle_message_queue)
-    # msg_queue_thread.daemon = True
-    # msg_queue_thread.start()
+    socket_servers = []
+    processes = []
+    for port in child_socket_ports:
+        socket_servers.append(SocketServer(port))
+
+    for child_socket in socket_servers:
+        processes.append(Process(target=child_socket.start_server))
+
+    for process in processes:
+        # process.join()
+        process.start()
+        process.join()
 
     try:
         main_socket = MainSocketServer(main_socket_port)
@@ -155,6 +182,9 @@ def main():
         # for child_socket in socket_servers:
         #     child_socket.server.shutdown()
         main_socket.server.shutdown()
+        for process in processes:
+            # process.join()
+            process.close()
         print("Closing down servers")
 
 

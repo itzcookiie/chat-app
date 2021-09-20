@@ -1,66 +1,80 @@
 import socket
 import sys
-import json
 import threading
+import pickle
+
+
+class Actions:
+    ASSIGN_USER = "ASSIGN_USER"
+    ROOM_CHAT = "ROOM_CHAT"
+    FIRST_TIME = "FIRST_TIME"
+
 
 string_message = "Mike: Hello from client".encode('ascii')
 int_message = (3005).to_bytes(4096, sys.byteorder)
-address = ('0.0.0.0', 5000)
-rooms = ["A", "B"]
-
-s = socket.socket()
-s.connect(address)
-s.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+address = ('127.0.0.1', 6942)
+# Create IntByte and StringByte class with their own encoder function
+rooms = ["A", "B", "C"]
 
 
-def send_message_to_server(msg):
+class SerialiseData:
+    @staticmethod
+    def serialise_data(data):
+        return pickle.dumps(data)
+
+    @staticmethod
+    def unserialise_data(data):
+        return pickle.loads(data)
+
+
+def send_message_to_server(s, msg):
     s.sendall(msg)
-    # res = s.recv(4096).decode('ascii')
-    # return res
+    return SerialiseData.unserialise_data(s.recv(4096))
+
+
+def chat(s, user, room):
+    while True:
+        message = input()
+        full_message = SerialiseData.serialise_data(f"{user}: {message}")
+        data = {"user": user, "room": room, "message": full_message, "action": Actions.ROOM_CHAT}
+        send_message_to_server(s, SerialiseData.serialise_data(data))
+        # if len(response):
+        #     continue
 
 
 def check_messages(new_socket):
     while True:
-        res = new_socket.recv(4096).decode('ascii')
+        res = SerialiseData.unserialise_data(new_socket.recv(4096))
         print(res)
 
 
-def convert_json_to_bytes(data):
-    return json.dumps(data).encode('ascii')
-
-
 # TODO
-# Ask user for username and give them a list of rooms to join.
+# Ask user for user and give them a list of rooms to join.
 # Then send this info to the server socket who will assign the user a room
 # Then whenever this user sends a message, only users in that room will see it
 # Can also clear the previous messages, so it's like they have now joined a room
 # Every message user will send will be an input. That way we don't need to deal with keyboard library
 
 
+s = socket.socket()
+host = socket.gethostbyname("localhost") # Get local machine name
+s.connect(address)
 print("Welcome to chat app room!")
-username = input("Please enter a username: ")
-# sign_up_data = {"username": username, "room": room, "action": "ASSIGN_USER"}
-# response = send_message_to_server(convert_json_to_bytes(sign_up_data))
-# print(response)
+user = input("Please enter a user: ")
+room = input(f"Pick a room between {rooms[0]} - {rooms[-1]}: ")
+sign_up_data = {"user": user, "room": room, "action": Actions.ASSIGN_USER}
+chat_address = send_message_to_server(s, SerialiseData.serialise_data(sign_up_data))
+s.close()
+s2 = socket.socket()
+s2.connect(chat_address)
+first_time_data = {"user": user, "room": room, "action": Actions.FIRST_TIME}
+response = send_message_to_server(s2, SerialiseData.serialise_data(first_time_data))
 print("\n" * 10)
-print(f"Welcome to room {username}!")
-
-
-def send_messages(s):
-    while True:
-        message = input()
-        full_message = f"{username}: {message}".encode()
-        # room_chat_data = {"username": username, "room": room, "message": message, "action": "ROOM_CHAT"}
-        s.sendall(full_message)
-        # if len(response):
-        #     continue
-
+print(response)
 
 threads = []
-threads.append(threading.Thread(target=check_messages, args=(s,)))
-threads.append(threading.Thread(target=send_messages, args=(s,)))
+threads.append(threading.Thread(target=check_messages, args=(s2,)))
+threads.append(threading.Thread(target=chat, args=(s2, user, room)))
 for thread in threads:
     thread.start()
-
 
