@@ -1,31 +1,7 @@
 import socket
-import sys
 import threading
-import pickle
 from os import system, name
-
-
-string_message = "Mike: Hello from client".encode('ascii')
-int_message = (3005).to_bytes(4096, sys.byteorder)
-address = ('localhost', 5000)
-# Create IntByte and StringByte class with their own encoder function
-rooms = ["A", "B", "C"]
-
-
-class Actions:
-    ASSIGN_USER = "ASSIGN_USER"
-    ROOM_CHAT = "ROOM_CHAT"
-    FIRST_TIME = "FIRST_TIME"
-
-
-class SerialiseData:
-    @staticmethod
-    def serialise_data(data):
-        return pickle.dumps(data)
-
-    @staticmethod
-    def unserialise_data(data):
-        return pickle.loads(data)
+import constants
 
 
 def clear():
@@ -37,20 +13,20 @@ def clear():
 def send_message_to_server(s, msg, return_response=False):
     s.sendall(msg)
     if return_response:
-        return SerialiseData.unserialise_data(s.recv(4096))
+        return constants.SerialiseData.unserialise_data(s.recv(4096))
 
 
 def chat(s, user, room):
     while True:
         message = input()
-        full_message = SerialiseData.serialise_data(f"{user}: {message}")
-        data = {"user": user, "room": room, "message": full_message, "action": Actions.ROOM_CHAT}
-        send_message_to_server(s, SerialiseData.serialise_data(data))
+        full_message = constants.SerialiseData.serialise_data(f"{user}: {message}")
+        data = {"user": user, "room": room, "message": full_message, "action": constants.Actions.USER_CHAT}
+        send_message_to_server(s, constants.SerialiseData.serialise_data(data))
 
 
 def check_messages(new_socket):
     while True:
-        res = SerialiseData.unserialise_data(new_socket.recv(4096))
+        res = constants.SerialiseData.unserialise_data(new_socket.recv(4096))
         print(res)
 
 
@@ -63,16 +39,16 @@ def check_messages(new_socket):
 
 
 def main():
-    s = socket.create_connection(address)
+    s = socket.create_connection(constants.address)
     print("Welcome to chat app room!")
     user = input("Please enter a user: ")
-    room = input(f"Pick a room between {rooms[0]} - {rooms[-1]}: ")
-    sign_up_data = {"user": user, "room": room, "action": Actions.ASSIGN_USER}
-    chat_address = send_message_to_server(s, SerialiseData.serialise_data(sign_up_data), True)
+    room = input(f"Pick a room between {constants.rooms[0]} - {constants.rooms[-1]}: ")
+    sign_up_data = {"user": user, "room": room, "action": constants.Actions.ASSIGN_USER}
+    chat_address = send_message_to_server(s, constants.SerialiseData.serialise_data(sign_up_data), True)
     s.close()
     s2 = socket.create_connection(chat_address)
-    first_time_data = {"user": user, "room": room, "action": Actions.FIRST_TIME}
-    response = send_message_to_server(s2, SerialiseData.serialise_data(first_time_data), True)
+    first_time_data = {"user": user, "room": room, "action": constants.Actions.FIRST_TIME}
+    response = send_message_to_server(s2, constants.SerialiseData.serialise_data(first_time_data), True)
     clear()
     print(response)
 

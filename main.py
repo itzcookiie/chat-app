@@ -1,77 +1,12 @@
 import socket
-import socketserver
-
 import pickle
-import sys
 import threading
-import json
 from multiprocessing import Process
+import constants
 
 
-class Actions:
-    ASSIGN_USER = "ASSIGN_USER"
-    USER_CHAT = "USER_CHAT"
-    FIRST_TIME = "FIRST_TIME"
-
-
-class SerialiseData:
-    @staticmethod
-    def serialise_data(data):
-        return pickle.dumps(data)
-
-    @staticmethod
-    def unserialise_data(data):
-        return pickle.loads(data)
-
-
-main_socket_port = 5000
-child_socket_ports = [3005, 3010]
-socket_room_mapping = {
-    "A": 3005,
-    "B": 3010
-}
-
-def send_message_to_child_socket(sock, message: str) -> None:
-    with socket.socket() as sock:
-        address = ('localhost', port)
-        sock.connect(address)
-        with sock:
-            print(f"MainSocketServer: Sending message from client to ChildSocket {port}")
-            data = message.encode('ascii')
-            sock.sendall(data)
-            response = sock.recv(1024).decode('ascii')
-            print(response)
-
-
-def convert_bytes_to_json(data):
-    return json.loads(data.encode('ascii'))
-
-
-class ChildSocketRequestHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        # Message sent from MainSocketServer
-        data = self.request.recv(1024).decode('ascii')
-        print(f"Client: {data}")
-        cur_thread = threading.current_thread()
-        message = f"ChildSocket: Message sent by MainSocketServer received!"
-        response = f"{cur_thread.name}: {message}".encode('ascii')
-        self.request.sendall(response)
-
-
-class MainSocketRequestHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        print(self.client_address)
-        print(self.request)
-        print(self.server)
-        data = self.request.recv(1024).decode('ascii')
-        for port in child_socket_ports:
-            send_message_to_child_socket(port, data)
-        child_socket_ports_string = [str(s) for s in child_socket_ports]
-        self.request.sendall(f'Successfully sent message to ports {" and ".join(child_socket_ports_string)}'.encode('ascii'))
-
-
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
+child_socket_ports = [3005, 3010, 3015]
+socket_room_mapping = {room: child_socket_port for room, child_socket_port in zip(constants.rooms, child_socket_ports)}
 
 
 class BaseSocketServer:
@@ -80,16 +15,14 @@ class BaseSocketServer:
         self.server = socket.create_server(self.address)
 
     def start_server(self):
-        print('Starting server...')
+        print(f'Starting server on {self.address}...')
         with self.server:
             self.server.listen()
-            print(f'Server now listening for requests on {self.address}..')
+            print(f'Server now listening for requests...')
             while True:
+                print(f'Server now accepting requests...')
                 new_socket, addr = self.server.accept()
                 self.handle_server(new_socket, addr)
-
-    def handle_message(self, message):
-        pass
 
     def handle_server(self, new_socket, addr):
         pass
@@ -101,7 +34,7 @@ class SocketServer(BaseSocketServer):
         self.clients = []
 
     def handle_server(self, new_socket, addr):
-        print(f"Connected to {addr}")
+        print(f"Child Socket {self.address[1]} connected to {addr}")
         self.add_client(new_socket)
         # username = new_socket.recv(1024).decode()
         # new_socket.sendall(f"{username} has joined the server!".encode())
@@ -111,12 +44,10 @@ class SocketServer(BaseSocketServer):
 
     def check_for_messages(self, new_socket):
         while True:
-            data = SerialiseData.unserialise_data(new_socket.recv(1024))
+            data = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
             print("data", data)
-            print(f"Socket {self.address}")
-            print('clients', self.clients)
-            if data["action"] == Actions.FIRST_TIME:
-                welcome_msg = SerialiseData.serialise_data(f"{data['user']} has joined the room!")
+            if data["action"] == constants.Actions.FIRST_TIME:
+                welcome_msg = constants.SerialiseData.serialise_data(f"{data['user']} has joined the room!")
                 for client in self.clients:
                     client.sendall(welcome_msg)
             else:
@@ -126,14 +57,6 @@ class SocketServer(BaseSocketServer):
     def add_client(self, client):
         self.clients.append(client)
 
-    def handle_message(self, new_socket, addr):
-        host, port = addr
-        generic_response = self.create_generic_response(port)
-        new_socket.sendall(generic_response)
-
-    def create_generic_response(self, port):
-        return b'Hello from: port=' + str(port).encode('utf8') + b' and class=' + self.class_name_in_bytes
-
 
 class MainSocketServer(BaseSocketServer):
     def __init__(self, port):
@@ -142,27 +65,12 @@ class MainSocketServer(BaseSocketServer):
 
     def handle_server(self, new_socket, addr):
         message = pickle.loads(new_socket.recv(1024))
-        print(f"Connected to {addr}, {message['user']}")
-        if message["action"] == Actions.ASSIGN_USER:
+        print(f"Main socket {self.address[1]} connected to {addr}, {message['user']}")
+        if message["action"] == constants.Actions.ASSIGN_USER:
             room_port = socket_room_mapping[message["room"]]
-            socket_address = SerialiseData.serialise_data(('localhost', room_port))
+            socket_address = constants.SerialiseData.serialise_data(('localhost', room_port))
             new_socket.sendall(socket_address)
-        # new_socket.sendall("MainSocket welcomes you!".encode())
-        # for child_socket in self.child_sockets:
-        #     p = Process(target=child_socket.start_server)
-        #     p.start()
-        #     p.join()
 
-    def handle_message(self, new_socket, addr):
-        host, port = addr
-        generic_response = self.create_generic_response(port)
-        new_socket.sendall(generic_response)
-
-
-# TODO
-# Figure out how to terminate socket from cli
-# Currently have to press CTRL+C and then send another request from the client
-#
 
 def main():
     socket_servers = []
@@ -174,19 +82,15 @@ def main():
         processes.append(Process(target=child_socket.start_server))
 
     for process in processes:
-        # process.join()
         process.start()
 
     try:
-        main_socket = MainSocketServer(main_socket_port)
+        main_socket = MainSocketServer(constants.main_socket_port)
         main_socket.start_server()
     finally:
-        # for child_socket in socket_servers:
-        #     child_socket.server.shutdown()
-        main_socket.server.shutdown()
+        main_socket.server.close()
         for process in processes:
-            # process.join()
-            process.close()
+            process.terminate()
         print("Closing down servers")
 
 
