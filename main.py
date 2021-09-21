@@ -24,7 +24,7 @@ class SerialiseData:
         return pickle.loads(data)
 
 
-main_socket_port = 500
+main_socket_port = 5000
 child_socket_ports = [3005, 3010]
 socket_room_mapping = {
     "A": 3005,
@@ -83,7 +83,7 @@ class BaseSocketServer:
         print('Starting server...')
         with self.server:
             self.server.listen()
-            print('Server now listening for requests..')
+            print(f'Server now listening for requests on {self.address}..')
             while True:
                 new_socket, addr = self.server.accept()
                 self.handle_server(new_socket, addr)
@@ -112,6 +112,9 @@ class SocketServer(BaseSocketServer):
     def check_for_messages(self, new_socket):
         while True:
             data = SerialiseData.unserialise_data(new_socket.recv(1024))
+            print("data", data)
+            print(f"Socket {self.address}")
+            print('clients', self.clients)
             if data["action"] == Actions.FIRST_TIME:
                 welcome_msg = SerialiseData.serialise_data(f"{data['user']} has joined the room!")
                 for client in self.clients:
@@ -173,7 +176,6 @@ def main():
     for process in processes:
         # process.join()
         process.start()
-        process.join()
 
     try:
         main_socket = MainSocketServer(main_socket_port)
