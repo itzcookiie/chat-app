@@ -39,24 +39,42 @@ def check_messages(new_socket):
 
 
 def main():
-    s = socket.create_connection(constants.address)
     print("Welcome to chat app room!")
-    user = input("Please enter a user: ")
+    is_valid_user = False
+    while not is_valid_user:
+        with socket.create_connection(constants.address) as create_user_socket:
+            user = input("Please enter a username: ")
+            create_user_data = {"user": user, "action": constants.Actions.CREATE_USER}
+            results = send_message_to_server(create_user_socket, constants.SerialiseData.serialise_data(create_user_data), True)
+            if results["valid_user"]:
+                is_valid_user = True
+            else:
+                print("Invalid username. Please try again")
+                print("Username can only contain characters A-Z and 0-9\n")
+
     room = input(f"Pick a room between {constants.rooms[0]} - {constants.rooms[-1]}: ")
     sign_up_data = {"user": user, "room": room, "action": constants.Actions.ASSIGN_USER}
-    chat_address = send_message_to_server(s, constants.SerialiseData.serialise_data(sign_up_data), True)
-    s.close()
-    s2 = socket.create_connection(chat_address)
-    first_time_data = {"user": user, "room": room, "action": constants.Actions.FIRST_TIME}
-    response = send_message_to_server(s2, constants.SerialiseData.serialise_data(first_time_data), True)
-    clear()
-    print(response)
+    with socket.create_connection(constants.address) as assign_user_socket:
+        room_address = send_message_to_server(assign_user_socket, constants.SerialiseData.serialise_data(sign_up_data), True)
 
-    threads = []
-    threads.append(threading.Thread(target=check_messages, args=(s2,)))
-    threads.append(threading.Thread(target=chat, args=(s2, user, room)))
-    for thread in threads:
-        thread.start()
+    with socket.create_connection(room_address) as room_socket:
+        first_time_data = {"user": user, "room": room, "action": constants.Actions.FIRST_TIME}
+        response = send_message_to_server(room_socket, constants.SerialiseData.serialise_data(first_time_data), True)
+        clear()
+        print(response)
+
+        threads = []
+        threads.append(threading.Thread(target=check_messages, args=(room_socket,)))
+        threads.append(threading.Thread(target=chat, args=(room_socket, user, room)))
+        for thread in threads:
+            thread.daemon = True
+            thread.start()
+
+        try:
+            while True:
+                continue
+        finally:
+            room_socket.close()
 
 
 if __name__ == '__main__':

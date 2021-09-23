@@ -5,13 +5,19 @@ from multiprocessing import Process
 import constants
 
 
-child_socket_ports = [3005, 3010, 3015]
-socket_room_mapping = {room: child_socket_port for room, child_socket_port in zip(constants.rooms, child_socket_ports)}
+def create_socket_room_mapping():
+    port_step = 5
+    child_socket_start_port = 3000
+    child_socket_ports = [port + child_socket_start_port for port in range(0, len(constants.rooms) * port_step, port_step)]
+    return {
+        room: {"live": False, "port": child_socket_port}
+        for room, child_socket_port in zip(constants.rooms, child_socket_ports)
+    }
 
 
 class BaseSocketServer:
     def __init__(self, port):
-        self.address = ('localhost', port)
+        self.address = (constants.host, port)
         self.server = socket.create_server(self.address)
 
     def start_server(self):
@@ -61,36 +67,55 @@ class SocketServer(BaseSocketServer):
 class MainSocketServer(BaseSocketServer):
     def __init__(self, port):
         super(MainSocketServer, self).__init__(port)
-        self.child_sockets = []
+        self.rooms = create_socket_room_mapping()
+        self.child_socket_servers = []
+        self.processes = []
 
     def handle_server(self, new_socket, addr):
-        message = pickle.loads(new_socket.recv(1024))
-        print(f"Main socket {self.address[1]} connected to {addr}, {message['user']}")
-        if message["action"] == constants.Actions.ASSIGN_USER:
-            room_port = socket_room_mapping[message["room"]]
-            socket_address = constants.SerialiseData.serialise_data(('localhost', room_port))
+        body = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
+        print(body)
+        if body["action"] == constants.Actions.CREATE_USER:
+            user = body["user"]
+            if user.isalnum():
+                status = {"valid_user": True}
+                print(f"Main socket {self.address[1]} connected to {addr}, {body['user']}")
+            else:
+                status = {"valid_user": False}
+            status_serialised = constants.SerialiseData.serialise_data(status)
+            return new_socket.sendall(status_serialised)
+        elif body["action"] == constants.Actions.ASSIGN_USER:
+            room = self.rooms[body["room"]]
+            if not room["live"]:
+                new_child_socket = SocketServer(room["port"])
+                self.child_socket_servers.append(new_child_socket)
+                new_process = Process(target=new_child_socket.start_server)
+                self.processes.append(new_process)
+                new_process.start()
+                room["live"] = True
+
+            socket_address = constants.SerialiseData.serialise_data((constants.host, room["port"]))
             new_socket.sendall(socket_address)
 
 
 def main():
-    socket_servers = []
-    processes = []
-    for port in child_socket_ports:
-        socket_servers.append(SocketServer(port))
-
-    for child_socket in socket_servers:
-        processes.append(Process(target=child_socket.start_server))
-
-    for process in processes:
-        process.start()
+    # socket_servers = []
+    # processes = []
+    # for port in child_socket_ports:
+    #     socket_servers.append(SocketServer(port))
+    #
+    # for child_socket in socket_servers:
+    #     processes.append(Process(target=child_socket.start_server))
+    #
+    # for process in processes:
+    #     process.start()
 
     try:
         main_socket = MainSocketServer(constants.main_socket_port)
         main_socket.start_server()
     finally:
         main_socket.server.close()
-        for process in processes:
-            process.terminate()
+        # for process in processes:
+        #     process.terminate()
         print("Closing down servers")
 
 
