@@ -1,5 +1,4 @@
 import socket
-import pickle
 import threading
 from multiprocessing import Process
 import constants
@@ -41,7 +40,6 @@ class SocketServer(BaseSocketServer):
 
     def handle_server(self, new_socket, addr):
         print(f"Child Socket {self.address[1]} connected to {addr}")
-        self.add_client(new_socket)
         # username = new_socket.recv(1024).decode()
         # new_socket.sendall(f"{username} has joined the server!".encode())
         t = threading.Thread(target=self.check_for_messages, args=(new_socket, ))
@@ -51,13 +49,24 @@ class SocketServer(BaseSocketServer):
     def check_for_messages(self, new_socket):
         while True:
             data = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
-            print("data", data)
             if data["action"] == constants.Actions.FIRST_TIME:
+                self.add_client((new_socket, data['user']))
                 welcome_msg = constants.SerialiseData.serialise_data(f"{data['user']} has joined the room!")
-                for client in self.clients:
+                for (client, user) in self.clients:
                     client.sendall(welcome_msg)
+            elif data["action"] == constants.Actions.LOG_OUT:
+                new_socket.close()
+                client = list(filter(lambda client_data: new_socket in client_data, self.clients)).pop()
+                removed_socket, removed_user = client
+                print(f'Removing {removed_user}')
+                if len(client):
+                    self.clients.remove(client)
+                for (client, user) in self.clients:
+                    log_out_msg = constants.SerialiseData.serialise_data(f"{removed_user} has left the room!")
+                    client.sendall(log_out_msg)
+                break
             else:
-                for client in self.clients:
+                for (client, user) in self.clients:
                     client.sendall(data["message"])
 
     def add_client(self, client):
@@ -73,17 +82,8 @@ class MainSocketServer(BaseSocketServer):
 
     def handle_server(self, new_socket, addr):
         body = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
-        print(body)
-        if body["action"] == constants.Actions.CREATE_USER:
-            user = body["user"]
-            if user.isalnum():
-                status = {"valid_user": True}
-                print(f"Main socket {self.address[1]} connected to {addr}, {body['user']}")
-            else:
-                status = {"valid_user": False}
-            status_serialised = constants.SerialiseData.serialise_data(status)
-            return new_socket.sendall(status_serialised)
-        elif body["action"] == constants.Actions.ASSIGN_USER:
+        print(f"Main socket {self.address[1]} connected to {addr}, {body['user']}")
+        if body["action"] == constants.Actions.ASSIGN_USER:
             room = self.rooms[body["room"]]
             if not room["live"]:
                 new_child_socket = SocketServer(room["port"])

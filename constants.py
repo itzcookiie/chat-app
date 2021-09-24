@@ -12,7 +12,7 @@ class Actions:
     ASSIGN_USER = "ASSIGN_USER"
     USER_CHAT = "USER_CHAT"
     FIRST_TIME = "FIRST_TIME"
-    CREATE_USER = "CREATE_USER"
+    LOG_OUT = "LOG_OUT"
 
 
 class SerialiseData:
