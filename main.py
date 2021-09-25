@@ -1,6 +1,6 @@
 import socket
 import threading
-from multiprocessing import Process
+from multiprocessing import Process, shared_memory
 import constants
 
 
@@ -37,6 +37,8 @@ class SocketServer(BaseSocketServer):
     def __init__(self, port):
         super(SocketServer, self).__init__(port)
         self.clients = []
+        self.users = []
+        self.shared_memory = shared_memory.SharedMemory(create=True, size=4096, name=f"{port}")
 
     def handle_server(self, new_socket, addr):
         print(f"Child Socket {self.address[1]} connected to {addr}")
@@ -48,36 +50,51 @@ class SocketServer(BaseSocketServer):
 
     def check_for_messages(self, new_socket):
         while True:
+            print(self)
             data = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
             if data["action"] == constants.Actions.FIRST_TIME:
-                self.add_client((new_socket, data['user']))
+                self.add_client(new_socket, data['user'])
                 welcome_msg = constants.SerialiseData.serialise_data(f"{data['user']} has joined the room!")
-                for (client, user) in self.clients:
+                for client in self.clients:
                     client.sendall(welcome_msg)
             elif data["action"] == constants.Actions.LOG_OUT:
+                print(self.clients)
                 new_socket.close()
-                client = list(filter(lambda client_data: new_socket in client_data, self.clients)).pop()
-                removed_socket, removed_user = client
-                print(f'Removing {removed_user}')
-                if len(client):
-                    self.clients.remove(client)
-                for (client, user) in self.clients:
-                    log_out_msg = constants.SerialiseData.serialise_data(f"{removed_user} has left the room!")
+                client_socket = list(filter(lambda client_socket: new_socket == client_socket, self.clients)).pop()
+                print(client_socket)
+                client_index = self.clients.index(client_socket)
+                user = self.users[client_index]
+                print(f'Removing {user}')
+                if isinstance(client_socket, socket.socket):
+                    self.clients.remove(client_socket)
+                    self.users.remove(user)
+                    self.__update_users()
+                for client in self.clients:
+                    log_out_msg = constants.SerialiseData.serialise_data(f"{user} has left the room!")
                     client.sendall(log_out_msg)
                 break
             else:
-                for (client, user) in self.clients:
+                for client in self.clients:
                     client.sendall(data["message"])
 
-    def add_client(self, client):
-        self.clients.append(client)
+    def add_client(self, client_socket, user):
+        self.clients.append(client_socket)
+        self.users.append(user)
+        self.__update_users()
+
+    def get_users(self):
+        return constants.SerialiseData.unserialise_data(self.shared_memory.buf)
+
+    def __update_users(self):
+        serialised_users = constants.SerialiseData.serialise_data(self.users)
+        self.shared_memory.buf[:len(serialised_users)] = serialised_users
 
 
 class MainSocketServer(BaseSocketServer):
     def __init__(self, port):
         super(MainSocketServer, self).__init__(port)
         self.rooms = create_socket_room_mapping()
-        self.child_socket_servers = []
+        self.child_socket_servers = {}
         self.processes = []
 
     def handle_server(self, new_socket, addr):
@@ -87,13 +104,24 @@ class MainSocketServer(BaseSocketServer):
             room = self.rooms[body["room"]]
             if not room["live"]:
                 new_child_socket = SocketServer(room["port"])
-                self.child_socket_servers.append(new_child_socket)
+                self.child_socket_servers[body["room"]] = new_child_socket
                 new_process = Process(target=new_child_socket.start_server)
                 self.processes.append(new_process)
                 new_process.start()
                 room["live"] = True
+                response = {"room_address": (constants.host, room["port"]), "user_unique": True}
+            else:
+                child_socket = self.child_socket_servers[body["room"]]
+                users_in_room = child_socket.get_users()
+                print(users_in_room)
+                duplicate_usernames = list(filter(lambda user: user == body['user'], users_in_room))
+                print(duplicate_usernames)
+                if len(duplicate_usernames):
+                    response = {"user_unique": False}
+                else:
+                    response = {"room_address": (constants.host, room["port"]), "user_unique": True}
 
-            socket_address = constants.SerialiseData.serialise_data((constants.host, room["port"]))
+            socket_address = constants.SerialiseData.serialise_data(response)
             new_socket.sendall(socket_address)
 
 

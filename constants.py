@@ -13,6 +13,7 @@ class Actions:
     USER_CHAT = "USER_CHAT"
     FIRST_TIME = "FIRST_TIME"
     LOG_OUT = "LOG_OUT"
+    CHECK_USER_UNIQUE = "CHECK_USER_UNIQUE"
 
 
 class SerialiseData:

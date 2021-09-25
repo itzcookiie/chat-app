@@ -53,11 +53,18 @@ def main():
         print("Invalid room ID. Please try again")
         print("For room ID, pick a letter in the alphabet")
         room = input(f"Pick a room between {constants.rooms[0]} - {constants.rooms[-1]}: \n")
-    sign_up_data = {"user": user, "room": room.upper(), "action": constants.Actions.ASSIGN_USER}
-    with socket.create_connection(constants.address) as assign_user_socket:
-        room_address = send_message_to_server(assign_user_socket, sign_up_data, True)
 
-    with socket.create_connection(room_address) as room_socket:
+    with socket.create_connection(constants.address) as assign_user_socket:
+        sign_up_data = {"user": user, "room": room.upper(), "action": constants.Actions.ASSIGN_USER}
+        response = send_message_to_server(assign_user_socket, sign_up_data, True)
+        while not response["user_unique"]:
+            print("That username has been taken")
+            user = input("Please enter another username: ")
+            sign_up_data = {"user": user, "room": room.upper(), "action": constants.Actions.ASSIGN_USER}
+            with socket.create_connection(constants.address) as assign_user_socket:
+                response = send_message_to_server(assign_user_socket, sign_up_data, True)
+
+    with socket.create_connection(response["room_address"]) as room_socket:
         first_time_data = {"user": user, "room": room, "action": constants.Actions.FIRST_TIME}
         response = send_message_to_server(room_socket, first_time_data, True)
         clear()
