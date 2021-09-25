@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 from multiprocessing import Process, shared_memory
 from constants import (
     rooms,
@@ -100,12 +101,15 @@ class SocketServer(BaseSocketServer):
         self.shared_memory.buf[:len(serialised_users)] = serialised_users
 
 
+def start_process_timer(child_socket_obj):
+    child_socket_obj["timer"] = time.time()
+
+
 class MainSocketServer(BaseSocketServer):
     def __init__(self, port):
         super(MainSocketServer, self).__init__(port)
         self.rooms = create_socket_room_mapping()
         self.child_socket_servers = {}
-        self.processes = []
 
     def handle_server(self, new_socket, addr):
         body = unserialise(new_socket.recv(1024))
@@ -114,15 +118,16 @@ class MainSocketServer(BaseSocketServer):
             room = self.rooms[body["room"]]
             if not room["live"]:
                 new_child_socket = SocketServer(room["port"])
-                self.child_socket_servers[body["room"]] = new_child_socket
                 new_process = Process(target=new_child_socket.start_server)
-                self.processes.append(new_process)
+                child_socket_obj = {"process": new_process, "timer": 0, "socket": new_child_socket}
+                self.child_socket_servers[body["room"]] = child_socket_obj
                 new_process.daemon = True
                 new_process.start()
+                start_process_timer(child_socket_obj)
                 room["live"] = True
                 response = {"room_address": (host, room["port"]), "user_unique": True}
             else:
-                child_socket = self.child_socket_servers[body["room"]]
+                child_socket = self.child_socket_servers[body["room"]]["socket"]
                 users_in_room = child_socket.get_users()
                 duplicate_usernames = list(filter(lambda user: user == body['user'], users_in_room))
                 if len(duplicate_usernames):
@@ -131,6 +136,27 @@ class MainSocketServer(BaseSocketServer):
                     response = {"room_address": (host, room["port"]), "user_unique": True}
 
             send_message(new_socket, response)
+
+'''
+Future improvements:
+- Close child sockets that no longer have any users
+
+Plan
+- Add a timer field to Child Socket server class e.g. self.timer = 0
+- Add a method that resets the timer field to time.time() (resets the time basically)
+- Finish method on main socket server where we check through each socket server and see if the timer is > 10 minutes
+- If timer is > 10 minutes, find the correct process by seeing which socket matches up
+- Terminate the process
+- Get the key based off the socket pair matching
+- Print (f'Closing down room {room}')
+'''
+
+    # def check_timer_on_process(self):
+    #     ten_minutes = 60 * 10
+    #     for child_socket_obj in self.child_socket_servers.values():
+    #         if len(child_socket_obj["socket"].get_users()) == 0:
+    #             time_diff = child_socket_obj["timer"] - time.time()
+    #             if time_diff >= ten_minutes:
 
 
 def main():
