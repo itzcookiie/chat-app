@@ -7,7 +7,8 @@ import constants
 def create_socket_room_mapping():
     port_step = 5
     child_socket_start_port = 3000
-    child_socket_ports = [port + child_socket_start_port for port in range(0, len(constants.rooms) * port_step, port_step)]
+    child_socket_ports = [port + child_socket_start_port for port in
+                          range(0, len(constants.rooms) * port_step, port_step)]
     return {
         room: {"live": False, "port": child_socket_port}
         for room, child_socket_port in zip(constants.rooms, child_socket_ports)
@@ -44,7 +45,7 @@ class SocketServer(BaseSocketServer):
         print(f"Child Socket {self.address[1]} connected to {addr}")
         # username = new_socket.recv(1024).decode()
         # new_socket.sendall(f"{username} has joined the server!".encode())
-        t = threading.Thread(target=self.check_for_messages, args=(new_socket, ))
+        t = threading.Thread(target=self.check_for_messages, args=(new_socket,))
         t.daemon = True
         t.start()
 
@@ -52,17 +53,19 @@ class SocketServer(BaseSocketServer):
         while True:
             print(self)
             data = constants.unserialise(new_socket.recv(1024))
-            if data["action"] == constants.Actions.FIRST_TIME:
+            if data["action"] == constants.actions["FIRST_TIME"]:
                 self.add_client(new_socket, data['user'])
-                welcome_msg = f"{data['user']} has joined the room!"
+                welcome_msg = f"{data['user']} has joined room {data['room']}!"
                 for client in self.clients:
                     constants.send_message(client, welcome_msg)
-            elif data["action"] == constants.Actions.LOG_OUT or data['message'] == constants.Commands.QUIT_ROOM:
+            elif (data["action"] == constants.actions["LOG_OUT"] or data['message'] == constants.Commands.QUIT_ROOM
+                    or data['message'] == constants.Commands.CHANGE_ROOM):
                 self.log_out_user(new_socket)
                 break
+            elif data['message'] == constants.Commands.CHANGE_ROOM:
+                print('Changing room..')
+                pass
             else:
-                if data['message'] == constants.Commands.CHANGE_ROOM:
-                    pass
                 full_message = f"{data['user']}: {data['message']}"
                 for client in self.clients:
                     constants.send_message(client, full_message)
@@ -75,6 +78,7 @@ class SocketServer(BaseSocketServer):
         client_index = self.clients.index(client_socket)
         user = self.users[client_index]
         print(f'Removing {user}')
+        # Check client_socket is a value and not empty
         if isinstance(client_socket, socket.socket):
             self.clients.remove(client_socket)
             self.users.remove(user)
@@ -106,13 +110,14 @@ class MainSocketServer(BaseSocketServer):
     def handle_server(self, new_socket, addr):
         body = constants.unserialise(new_socket.recv(1024))
         print(f"Main socket {self.address[1]} connected to {addr}, {body['user']}")
-        if body["action"] == constants.Actions.ASSIGN_USER:
+        if body["action"] == constants.actions["ASSIGN_USER"]:
             room = self.rooms[body["room"]]
             if not room["live"]:
                 new_child_socket = SocketServer(room["port"])
                 self.child_socket_servers[body["room"]] = new_child_socket
                 new_process = Process(target=new_child_socket.start_server)
                 self.processes.append(new_process)
+                new_process.daemon = True
                 new_process.start()
                 room["live"] = True
                 response = {"room_address": (constants.host, room["port"]), "user_unique": True}
@@ -127,8 +132,7 @@ class MainSocketServer(BaseSocketServer):
                 else:
                     response = {"room_address": (constants.host, room["port"]), "user_unique": True}
 
-            socket_address = constants.serialise(response)
-            new_socket.sendall(socket_address)
+            constants.send_message(new_socket, response)
 
 
 def main():
@@ -148,8 +152,6 @@ def main():
         main_socket.start_server()
     finally:
         main_socket.server.close()
-        # for process in processes:
-        #     process.terminate()
         print("Closing down servers")
 
 

@@ -7,18 +7,13 @@ host = 'localhost'
 address = (host, main_socket_port)
 rooms = list(string.ascii_uppercase)
 
-
-class Commands:
-    CHANGE_ROOM = "/change_room"
-    QUIT_ROOM = "/quit"
-
-
-class Actions:
-    ASSIGN_USER = "ASSIGN_USER"
-    USER_CHAT = "USER_CHAT"
-    FIRST_TIME = "FIRST_TIME"
-    LOG_OUT = "LOG_OUT"
-    CHECK_USER_UNIQUE = "CHECK_USER_UNIQUE"
+actions = {
+    "ASSIGN_USER": 0,
+    "USER_CHAT": 1,
+    "FIRST_TIME": 2,
+    "LOG_OUT": 3,
+    "CHECK_USER_UNIQUE": 4
+}
 
 
 def serialise(data):
@@ -34,3 +29,18 @@ def send_message(s, data, return_response=False):
     s.sendall(msg)
     if return_response:
         return unserialise(s.recv(4096))
+
+
+class Commands:
+    CHANGE_ROOM = "/change_room"
+    QUIT_ROOM = "/quit"
+
+    def show_commands(self):
+        multiplier = 25
+        print(f"{'-' * multiplier} {Commands.__name__} {'-' * multiplier}")
+        print(f"{self.CHANGE_ROOM} - Enter /change_room to change to another room")
+        print(f"{self.QUIT_ROOM} - Enter /quit to log out")
+        print(f"{'-' * multiplier}{'-' * (len(Commands.__name__) + 2)}{'-' * multiplier}")
+
+
+
