@@ -35,7 +35,7 @@ class Commands:
     CHANGE_ROOM = "/change_room"
     QUIT_ROOM = "/quit"
 
-    def show_commands(self):
+    def print_commands(self):
         multiplier = 25
         print(f"{'-' * multiplier} {Commands.__name__} {'-' * multiplier}")
         print(f"{self.CHANGE_ROOM} - Enter /change_room to change to another room")
