@@ -51,31 +51,37 @@ class SocketServer(BaseSocketServer):
     def check_for_messages(self, new_socket):
         while True:
             print(self)
-            data = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
+            data = constants.unserialise(new_socket.recv(1024))
             if data["action"] == constants.Actions.FIRST_TIME:
                 self.add_client(new_socket, data['user'])
-                welcome_msg = constants.SerialiseData.serialise_data(f"{data['user']} has joined the room!")
+                welcome_msg = f"{data['user']} has joined the room!"
                 for client in self.clients:
-                    client.sendall(welcome_msg)
-            elif data["action"] == constants.Actions.LOG_OUT:
-                print(self.clients)
-                new_socket.close()
-                client_socket = list(filter(lambda client_socket: new_socket == client_socket, self.clients)).pop()
-                print(client_socket)
-                client_index = self.clients.index(client_socket)
-                user = self.users[client_index]
-                print(f'Removing {user}')
-                if isinstance(client_socket, socket.socket):
-                    self.clients.remove(client_socket)
-                    self.users.remove(user)
-                    self.__update_users()
-                for client in self.clients:
-                    log_out_msg = constants.SerialiseData.serialise_data(f"{user} has left the room!")
-                    client.sendall(log_out_msg)
+                    constants.send_message(client, welcome_msg)
+            elif data["action"] == constants.Actions.LOG_OUT or data['message'] == constants.Commands.QUIT_ROOM:
+                self.log_out_user(new_socket)
                 break
             else:
+                if data['message'] == constants.Commands.CHANGE_ROOM:
+                    pass
+                full_message = f"{data['user']}: {data['message']}"
                 for client in self.clients:
-                    client.sendall(data["message"])
+                    constants.send_message(client, full_message)
+
+    def log_out_user(self, new_socket):
+        print(self.clients)
+        new_socket.close()
+        client_socket = list(filter(lambda s: new_socket == s, self.clients)).pop()
+        print(client_socket)
+        client_index = self.clients.index(client_socket)
+        user = self.users[client_index]
+        print(f'Removing {user}')
+        if isinstance(client_socket, socket.socket):
+            self.clients.remove(client_socket)
+            self.users.remove(user)
+            self.__update_users()
+        log_out_msg = f"{user} has left the room!"
+        for client in self.clients:
+            constants.send_message(client, log_out_msg)
 
     def add_client(self, client_socket, user):
         self.clients.append(client_socket)
@@ -83,10 +89,10 @@ class SocketServer(BaseSocketServer):
         self.__update_users()
 
     def get_users(self):
-        return constants.SerialiseData.unserialise_data(self.shared_memory.buf)
+        return constants.unserialise(self.shared_memory.buf)
 
     def __update_users(self):
-        serialised_users = constants.SerialiseData.serialise_data(self.users)
+        serialised_users = constants.serialise(self.users)
         self.shared_memory.buf[:len(serialised_users)] = serialised_users
 
 
@@ -98,7 +104,7 @@ class MainSocketServer(BaseSocketServer):
         self.processes = []
 
     def handle_server(self, new_socket, addr):
-        body = constants.SerialiseData.unserialise_data(new_socket.recv(1024))
+        body = constants.unserialise(new_socket.recv(1024))
         print(f"Main socket {self.address[1]} connected to {addr}, {body['user']}")
         if body["action"] == constants.Actions.ASSIGN_USER:
             room = self.rooms[body["room"]]
@@ -121,7 +127,7 @@ class MainSocketServer(BaseSocketServer):
                 else:
                     response = {"room_address": (constants.host, room["port"]), "user_unique": True}
 
-            socket_address = constants.SerialiseData.serialise_data(response)
+            socket_address = constants.serialise(response)
             new_socket.sendall(socket_address)
 
 

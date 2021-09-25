@@ -10,25 +10,21 @@ def clear():
     system('cls') if name == 'nt' else system('clear')
 
 
-def send_message_to_server(s, data, return_response=False):
-    msg = constants.SerialiseData.serialise_data(data)
-    s.sendall(msg)
-    if return_response:
-        return constants.SerialiseData.unserialise_data(s.recv(4096))
-
-
 def chat(s, user, room):
     while True:
         message = input()
-        full_message = constants.SerialiseData.serialise_data(f"{user}: {message}")
-        data = {"user": user, "room": room, "message": full_message, "action": constants.Actions.USER_CHAT}
-        send_message_to_server(s, data)
+        # full_message = constants.serialise(f"{user}: {message}")
+        data = {"user": user, "room": room, "message": message, "action": constants.Actions.USER_CHAT}
+        constants.send_message(s, data)
 
 
 def check_messages(new_socket):
-    while True:
-        res = constants.SerialiseData.unserialise_data(new_socket.recv(4096))
-        print(res)
+    try:
+        while True:
+            res = constants.unserialise(new_socket.recv(4096))
+            print(res)
+    except ConnectionAbortedError:
+        print("You have been disconnected")
 
 
 # TODO
@@ -56,34 +52,38 @@ def main():
 
     with socket.create_connection(constants.address) as assign_user_socket:
         sign_up_data = {"user": user, "room": room.upper(), "action": constants.Actions.ASSIGN_USER}
-        response = send_message_to_server(assign_user_socket, sign_up_data, True)
+        response = constants.send_message(assign_user_socket, sign_up_data, True)
         while not response["user_unique"]:
             print("That username has been taken")
             user = input("Please enter another username: ")
             sign_up_data = {"user": user, "room": room.upper(), "action": constants.Actions.ASSIGN_USER}
             with socket.create_connection(constants.address) as assign_user_socket:
-                response = send_message_to_server(assign_user_socket, sign_up_data, True)
+                response = constants.send_message(assign_user_socket, sign_up_data, True)
 
     with socket.create_connection(response["room_address"]) as room_socket:
         first_time_data = {"user": user, "room": room, "action": constants.Actions.FIRST_TIME}
-        response = send_message_to_server(room_socket, first_time_data, True)
+        response = constants.send_message(room_socket, first_time_data, True)
         clear()
         print(response)
 
         threads = []
         threads.append(threading.Thread(target=check_messages, args=(room_socket,)))
-        threads.append(threading.Thread(target=chat, args=(room_socket, user, room)))
         for thread in threads:
-            thread.daemon = True
+            # thread.daemon = True
             thread.start()
 
         try:
             while True:
-                continue
+                message = input()
+                # full_message = constants.serialise(f"{user}: {message}")
+                data = {"user": user, "room": room, "message": message, "action": constants.Actions.USER_CHAT}
+                constants.send_message(room_socket, data)
+                if message == constants.Commands.QUIT_ROOM:
+                    break
         finally:
             print("Logging out..")
             log_out_data = {"user": user, "room": room, "action": constants.Actions.LOG_OUT}
-            send_message_to_server(room_socket, log_out_data)
+            constants.send_message(room_socket, log_out_data)
             room_socket.close()
 
 
