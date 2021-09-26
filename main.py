@@ -75,7 +75,6 @@ class SocketServer(BaseSocketServer):
                     send_message(client, full_message)
 
     def log_out_user(self, new_socket):
-        new_socket.shutdown(socket.SHUT_RD)  # Stop client server from being open to receiving (close client connection)
         client_socket = list(filter(lambda s: new_socket == s, self.clients)).pop()
         client_index = self.clients.index(client_socket)
         user = self.users[client_index]
@@ -123,7 +122,7 @@ class MainSocketServer(BaseSocketServer):
                 self.child_socket_servers[body["room"]] = child_socket_obj
                 new_process.daemon = True
                 new_process.start()
-                start_process_timer(child_socket_obj)
+                # start_process_timer(child_socket_obj)
                 room["live"] = True
                 response = {"room_address": (host, room["port"]), "user_unique": True}
             else:
