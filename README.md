@@ -18,16 +18,21 @@
 #### For the chat room effect
 - Build 3 socket servers, one main and two child ones ✅
 
-*Part 1*
-- Send a message to the main socket from a client and broadcast/send that message to the other child ones ✅
+*Part 1* ✅
+- Send a message to the main socket from a client and broadcast/send that message to the other child ones
 
-*Part 2*
+EDIT: I did this differently because the idea was for the main socket to connect the child socket to the clients. But doing it this way won't work because the child socket is not connected to the client. So basically, the client has to issue the connection for the child socket to send a response. Since only the main socket is connected it won't work. 
+
+Instead the client connects to the main socket, the main socket sends the address of the child socket (AKA room) and the client then connects to the child socket and sends messages there. The child socket will hold a list of users and send out messages to all the users there
+
+*Part 2* ✅
 - Create two client sockets (or imagine you have 2 users)
+  - Use input in a while loop to give the impression of a logged in user
 - Map the two child server sockets to the two client sockets
 - So when a client sends a message to the server, only it's chosen server socket will see the message (important part) and respond back to it
 - IE. a client can identify itself with a particular server socket
 
-#### Room isolation
+#### Room isolation ✅
 - Should be enough having each socket on a different port
 - Unless e.g. you can only use one port per process/thread or something like that
 - In a situation like that, we will do multiprocessing
