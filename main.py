@@ -159,8 +159,8 @@ Plan
 
 
 def main():
+    main_socket = MainSocketServer(main_socket_port)
     try:
-        main_socket = MainSocketServer(main_socket_port)
         main_socket.start_server()
     finally:
         main_socket.server.close()
