@@ -3,7 +3,7 @@ import string
 
 
 main_socket_port = 5000
-host = 'localhost'
+host = ''
 address = (host, main_socket_port)
 rooms = list(string.ascii_uppercase)
 

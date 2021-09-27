@@ -68,7 +68,7 @@ def main():
 
         # Get assigned to room
         if state == states["GET_ASSIGNED_TO_ROOM"]:
-            with socket.create_connection(address) as assign_user_socket:
+            with socket.create_connection(('109.74.196.159', 30163)) as assign_user_socket:
                 sign_up_data = {"user": user, "room": room.upper(), "action": actions["ASSIGN_USER"]}
                 response = send_message(assign_user_socket, sign_up_data, True)
                 while not response["user_unique"]:
