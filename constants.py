@@ -7,12 +7,15 @@ host = ''
 address = (host, main_socket_port)
 rooms = list(string.ascii_uppercase)
 
-actions = {
+client_actions = {
     "ASSIGN_USER": 0,
     "USER_CHAT": 1,
     "FIRST_TIME": 2,
-    "LOG_OUT": 3,
-    "CHECK_USER_UNIQUE": 4
+    "LOG_OUT": 3
+}
+
+server_actions = {
+    "GET_USERS": 0
 }
 
 

@@ -4,7 +4,7 @@ from os import system, name
 from constants import (
     rooms,
     unserialise,
-    actions,
+    client_actions,
     send_message,
     Commands,
     address
@@ -27,7 +27,7 @@ def clear():
 def chat(s, user, room):
     while True:
         message = input()
-        data = {"user": user, "room": room, "message": message, "action": actions["USER_CHAT"]}
+        data = {"user": user, "room": room, "message": message, "action": client_actions["USER_CHAT"]}
         send_message(s, data)
 
 
@@ -42,6 +42,7 @@ def check_messages(new_socket):
 
 def main():
     state = None
+    main_socket_address = ('', 5000)
     while state != states["EXIT"]:
         if state is None:
             # Welcome user
@@ -68,22 +69,22 @@ def main():
 
         # Get assigned to room
         if state == states["GET_ASSIGNED_TO_ROOM"]:
-            with socket.create_connection(('109.74.196.159', 30163)) as assign_user_socket:
-                sign_up_data = {"user": user, "room": room.upper(), "action": actions["ASSIGN_USER"]}
+            with socket.create_connection(main_socket_address) as assign_user_socket:
+                sign_up_data = {"user": user, "room": room.upper(), "action": client_actions["ASSIGN_USER"]}
                 response = send_message(assign_user_socket, sign_up_data, True)
                 while not response["user_unique"]:
                     print("That username has been taken")
                     user = input("Please enter another username: ")
-                    sign_up_data = {"user": user, "room": room.upper(), "action": actions["ASSIGN_USER"]}
-                    with socket.create_connection(address) as assign_user_socket:
-                        response = send_message(assign_user_socket, sign_up_data, True)
+                    sign_up_data = {"user": user, "room": room.upper(), "action": client_actions["ASSIGN_USER"]}
+                    with socket.create_connection(address) as new_assign_user_socket:
+                        response = send_message(new_assign_user_socket, sign_up_data, True)
 
                 state = states["JOIN_ROOM"]
 
         if state == states["JOIN_ROOM"]:
             # Join room
-            with socket.create_connection(response["room_address"]) as room_socket:
-                first_time_data = {"user": user, "room": room, "action": actions["FIRST_TIME"]}
+            with socket.create_connection(main_socket_address) as room_socket:
+                first_time_data = {"user": user, "room": room.upper(), "action": client_actions["FIRST_TIME"]}
                 response = send_message(room_socket, first_time_data, True)
                 clear()
                 print(response)
@@ -98,7 +99,7 @@ def main():
                 try:
                     while True:
                         message = input()
-                        data = {"user": user, "room": room, "message": message, "action": actions["USER_CHAT"]}
+                        data = {"user": user, "room": room, "message": message, "action": client_actions["USER_CHAT"]}
                         send_message(room_socket, data)
                         if message == Commands.QUIT_ROOM:
                             state = states["EXIT"]
@@ -109,7 +110,7 @@ def main():
                 finally:
                     print(f"Logging out from room {room}..")
                     if state != states["PICK_A_ROOM"] and state != states["EXIT"]:
-                        log_out_data = {"user": user, "room": room, "action": actions["LOG_OUT"]}
+                        log_out_data = {"user": user, "room": room, "action": client_actions["LOG_OUT"]}
                         send_message(room_socket, log_out_data)
 
 
