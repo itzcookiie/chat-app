@@ -42,7 +42,7 @@ def check_messages(new_socket):
 
 def main():
     state = None
-    main_socket_address = ('', 5000)
+    main_socket_address = ('109.74.196.159', 30163)
     while state != states["EXIT"]:
         if state is None:
             # Welcome user
