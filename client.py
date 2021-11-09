@@ -36,7 +36,7 @@ def check_messages(new_socket):
         while True:
             res = unserialise(new_socket.recv(4096))
             print(res)
-    except ConnectionAbortedError:
+    except (ConnectionAbortedError, OSError):
         print("You have been disconnected")
 
 
@@ -60,7 +60,7 @@ def main():
         # Pick a room
         if state == states["PICK_A_ROOM"]:
             room = input(f"Pick a room between {rooms[0]} - {rooms[-1]}: ")
-            while not room.isalpha():
+            while room not in rooms:
                 print("Invalid room ID. Please try again")
                 print("For room ID, pick a letter in the alphabet")
                 room = input(f"Pick a room between {rooms[0]} - {rooms[-1]}: \n")
