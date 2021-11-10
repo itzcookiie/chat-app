@@ -39,6 +39,9 @@ def check_messages(new_socket):
     except (ConnectionAbortedError, OSError):
         print("You have been disconnected")
 
+def validate_username(username):
+    return username.split(' ')
+
 
 def main():
     state = None
@@ -51,9 +54,9 @@ def main():
 
             # Create user
             user = input("Please enter a username: ")
-            while not user.isalnum():
+            while not (user.isidentifier()):
                 print("Invalid username. Please try again")
-                print("Username can only contain characters A-Z and 0-9\n")
+                print("Username can only contain characters A-Z, 0-9 and underscores\n")
                 user = input("Please enter another username: ")
             state = states["PICK_A_ROOM"]
 
